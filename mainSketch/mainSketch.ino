@@ -1,17 +1,66 @@
 #include <ESP8266WiFi.h>        // Include the Wi-Fi library
+#include <ESP8266WebServer.h>   // And the webserver
+#include <uri/UriRegex.h>       // take URIRegex Library for simple path parameter checking
+
 #include "secrets.h"            // Secret Passwords
+#include "strip.h"              // My Lighning Library
 
 //Connection variables
 const char* ssid     = SECRET_WIFI_SSID;   
 const char* password = SECRET_WIFI_PASSWORD;
 
-WiFiServer server(80);
-String header;
+ESP8266WebServer server(80);
+
+//Our Rest Server
+void restServerRouting(){
+  server.on("/", HTTP_GET, []() {
+        Serial.println("called / "); 
+        server.send(200, F("text/html"),F("<h2>Welcome to BBQ Ambient Lighting API </h2><h1>BALA</h1>"));
+  });
+
+  server.on(F("/helloWorld"), HTTP_GET, []() {
+        Serial.println("world"); 
+        server.send(200, F("text/json"), F("{\"name\": \"Hello world\"}"));
+  });
+
+  server.on(UriRegex("^\\/([a-z]{3})\\/([0-9]+)\\/([0-9]+)\\/([0-9]+)$"), HTTP_GET, []() {
+    String prog = server.pathArg(0);
+    
+    String r = server.pathArg(1);
+    String g = server.pathArg(2);
+    String b = server.pathArg(3);
+
+    if (prog == "sta") {
+      prog_static(r.toInt(),g.toInt(),b.toInt());
+      server.send(200, F("text/html"), "prog static colorize");
+    }
+
+    else if ( prog == "sin") {
+      prog_sin(r.toInt(),g.toInt(),b.toInt());
+      server.send(200, F("text/html"), "prog sinusal wave colorize");
+    }
+
+    else{
+      prog_off();
+      server.send(200, F("text/html"), "fallback is off, because we cannont recognize what programm should be run");
+    }
+  });
+
+  
+  // Set not found response
+  server.onNotFound([]() { 
+    String message = "404: " + server.uri();
+    Serial.println(message); 
+    server.send(404, "text/plain", message);
+  });
+  
+}
+
 
 void setup() {
   
-  //Start the program
-  Serial.begin(9600); 
+  //Start the program and the Seriel Monitor
+  Serial.begin(115200); 
   delay(100);
   Serial.println("Starting Program");
 
@@ -21,49 +70,31 @@ void setup() {
   Serial.print(ssid); 
   Serial.println(" ...");
 
-  //check connection
+  //check connection until connected
   int seconds = 0;
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);                  //wait a second
     Serial.print("Status: ");
-    Serial.print(WiFi.status()); //status
-    Serial.print(" ");           //empty space
-    Serial.println(++seconds);   //seconds that are run
+    Serial.println(WiFi.status()); //status
   }
 
-  //reaching this code means were connected
-  Serial.println('\n');
+  //reaching this code means were connected, give out ip then
   Serial.println("Connection established!");  
   Serial.print("IP address:\t");
   Serial.println(WiFi.localIP());
 
-  //now Start WebServer
+  //Start rest server
+  restServerRouting();
   server.begin();
-  delay(100);
+  Serial.println("HTTP server started");
+
+  //Start LED SEtup
+  led_setup();
 }
 
 void loop() {
+  //here we just need to keep the Client alive
+  server.handleClient();
 
-  //check server
-  WiFiClient client = server.available();
-  if (client) { 
-    Serial.println("New Client."); // print a message out in the serial port
-    String currentLine = ""; // make a String to hold incoming data from the client
-    while (client.connected()) { // loop while the client's connected
-      if (client.available()) { // if there's bytes to read from the client,
-      char c = client.read(); // read a byte, then
-      Serial.write(c); // print it out the serial monitor
-      header += c;
-      if (c == '\n') { 
-        if (currentLine.length() == 0) {
-          client.println("HTTP/1.1 200 OK");
-          client.println("Content-type:text/html");
-          client.println("Connection: close");
-          client.println();
-        }
-      }
-     }
-    }
-  }
-  
+  led_update();
 }
