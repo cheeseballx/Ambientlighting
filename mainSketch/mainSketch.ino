@@ -11,6 +11,7 @@ const char* password = SECRET_WIFI_PASSWORD;
 
 ESP8266WebServer server(80);
 
+
 //Our Rest Server
 void restServerRouting(){
   server.on("/", HTTP_GET, []() {
@@ -18,25 +19,25 @@ void restServerRouting(){
         server.send(200, F("text/html"),F("<h2>Welcome to BBQ Ambient Lighting API </h2><h1>BALA</h1>"));
   });
 
-  server.on(F("/helloWorld"), HTTP_GET, []() {
-        Serial.println("world"); 
-        server.send(200, F("text/json"), F("{\"name\": \"Hello world\"}"));
-  });
+  //we need a 3 char long prog name and two colors in RGB with capital Letters A-F!!!
+  server.on(UriRegex("^\\/([a-z]{3})\\/([0-9A-F]{6})\\/([0-9A-F]{6})$"), HTTP_GET, []() {
 
-  server.on(UriRegex("^\\/([a-z]{3})\\/([0-9]+)\\/([0-9]+)\\/([0-9]+)$"), HTTP_GET, []() {
+    //read the programm
     String prog = server.pathArg(0);
-    
-    String r = server.pathArg(1);
-    String g = server.pathArg(2);
-    String b = server.pathArg(3);
 
+    //static Progam is simple just set the color
     if (prog == "sta") {
-      prog_static(r.toInt(),g.toInt(),b.toInt());
+      prog_static(server.pathArg(1),server.pathArg(2));
       server.send(200, F("text/html"), "prog static colorize");
     }
 
+    else if ( prog == "off") {
+      prog_off();
+      server.send(200, F("text/html"), "just off");
+    }
+
     else if ( prog == "sin") {
-      prog_sin(r.toInt(),g.toInt(),b.toInt());
+      prog_sin(server.pathArg(1),server.pathArg(2));
       server.send(200, F("text/html"), "prog sinusal wave colorize");
     }
 
@@ -44,6 +45,37 @@ void restServerRouting(){
       prog_off();
       server.send(200, F("text/html"), "fallback is off, because we cannont recognize what programm should be run");
     }
+  });
+
+  server.on("/dat", HTTP_POST, []() {
+      String message = "POST form was:\n";
+
+      String argname;
+      String strip;
+      int x_led;
+      
+      for (uint8_t i = 0; i < server.args(); i++) { 
+        argname = server.argName(i);
+        
+        message += " " + argname + ": " + server.arg(i) + "\n";
+
+        strip = argname.substring(0,1);
+        x_led = argname.substring(2,argname.length()).toInt();
+         
+        if ( strip == "1"){
+          setPix(1, x_led, server.arg(i));
+        }
+        else if (strip == "2") {
+          setPix(2, x_led, server.arg(i));
+        }
+        else if (strip == "X") {
+          setPix(1, x_led, server.arg(i));
+          setPix(2, x_led, server.arg(i));
+        }
+      }
+
+      show1();
+      server.send(200, "text/plain", message);
   });
 
   

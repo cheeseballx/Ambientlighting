@@ -6,11 +6,20 @@
 #endif
 
 //lets define out pins 
-#define PIN       5
+#define PIN1       5
+#define PIN2       4
 #define NUMPIXELS 84
 
 //instatiate neopiel library wit name pixels
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRBW + NEO_KHZ800); 
+Adafruit_NeoPixel pix1 = Adafruit_NeoPixel(NUMPIXELS, PIN1, NEO_GRBW + NEO_KHZ800); 
+Adafruit_NeoPixel pix2 = Adafruit_NeoPixel(NUMPIXELS, PIN2, NEO_GRBW + NEO_KHZ800); 
+
+Adafruit_NeoPixel static_color; 
+
+//gloal rgb
+char rgb1[] = {0,0,0};
+char rgb2[] = {0,0,0};
+
 
 //my Varaibles 
 int delay_val = 70;     //pause times
@@ -33,7 +42,7 @@ uint32_t rgb2rgbw(int r,int g,int b){
   float tM = max(r, max(g, b));
 
   //If the maximum value is 0, immediately return pure black.
-  if(tM == 0) return pixels.Color(0,0,0,0);
+  if(tM == 0) return static_color.Color(0,0,0,0);
   
 
   //This section serves to figure out what the color with 100% hue is
@@ -63,31 +72,69 @@ uint32_t rgb2rgbw(int r,int g,int b){
   if (Ro > 255) Ro = 255;
   if (Go > 255) Go = 255;
   
-  return pixels.Color(Ro,Go,Bo,Wo);
+  return static_color.Color(Ro,Go,Bo,Wo);
+}
+
+//read rgb
+void set_rgb(String hexStr,char* rgb){
+  char hex[7];
+  hexStr.toCharArray(hex,7);
+  unsigned long int rgb_long = strtol(hex,(char**)0, 16);
+
+  rgb[0] = (rgb_long / 256 / 256) % 256;
+  rgb[1] = (rgb_long / 256) % 256;
+  rgb[2] = rgb_long% 256;
 }
 
 void prog_off(){
   do_update = false;
-  pixels.clear();
+  pix1.clear();
+  pix2.clear();
+  pix1.show();
+  pix2.show();
 }
 
 //clear current, set static color and chill
-void prog_static(int r,int g, int b){
+void prog_static(String hex1, String hex2){
+
+  //stop updating if there is updating 
   do_update = false;
-  pixels.clear();
+
+  set_rgb(hex1,rgb1);
+  set_rgb(hex2,rgb2);
+
+  //set the two color strips
   for (int i=0; i<NUMPIXELS; i++) {
-    pixels.setPixelColor(i,rgb2rgbw(r,g,b));
+    pix1.setPixelColor(i,rgb2rgbw(rgb1[0],rgb1[1],rgb1[2]));
+    pix2.setPixelColor(i,rgb2rgbw(rgb2[0],rgb2[1],rgb2[2]));
   }
-  pixels.show();
+  pix1.show();
+  pix2.show();
+}
+
+void setPix(int strip, int x_led, String col){
+  set_rgb(col,rgb1);
+  if (strip == 1) pix1.setPixelColor(x_led,rgb2rgbw(rgb1[0],rgb1[1],rgb1[2]));
+  else            pix2.setPixelColor(x_led,rgb2rgbw(rgb1[0],rgb1[1],rgb1[2]));
+}
+
+void show1(){
+  pix1.show();
+  pix2.show();
 }
 
 //clear current, set static color and chill
-void prog_sin(int r,int g, int b){
+void prog_sin(String hex1,String hex2){
+
+  do_update = false;
+
+  
+  set_rgb(hex1,rgb1);
+  set_rgb(hex2,rgb2);
+  
   do_update = true;
-  global_r = r;
-  global_g = g;
-  global_b = b;
-  pixels.clear();
+
+  
 }
 
 
@@ -99,14 +146,15 @@ void led_setup(){
   #endif
   
   //set Pinmodes
-  pinMode(PIN, OUTPUT);
+  pinMode(PIN1, OUTPUT);
+  pinMode(PIN2, OUTPUT);
 
   //initialize ledstripe
-  pixels.begin();
-  pixels.clear();
+  pix1.begin();
+  pix2.clear();
 
   //default led programm
-  prog_static(255,255,255);
+  prog_static("FFFFFF","FF0000");
 
   Serial.println("LED Setup Done");
 }
@@ -116,22 +164,25 @@ void led_update(){
   if ( do_update == false)
     return; 
 
-    
-  float y = 0.0;
   float x = 0.0;
-  float val = 0.0;
+  float val1 = 0.0;
+  float val2 = 0.0;
   
   offset_x += x_speed;
   
   for (int i=0; i<NUMPIXELS; i++) {
     x = offset_x + i*x_pix;
-    y = sin(x);
-    val = (y+1.0)*(y_max-y_min)/2 + y_min;
+    
+    val1 = (sin(x)+1.0)*(y_max-y_min)/2 + y_min;
+    val2 = (sin(x)+1.0)*(y_max-y_min)/2 + y_min;
 
-    float fak = val/y_max;
+    float fak1 = val1/y_max;
+    float fak2 = val2/y_max;
   
-    pixels.setPixelColor(i,rgb2rgbw(fak*global_r,fak*global_g,fak*global_b));
+    pix1.setPixelColor(i,rgb2rgbw(fak1*rgb1[0],fak1*rgb1[1],fak1*rgb1[2]));
+    pix2.setPixelColor(i,rgb2rgbw(fak2*rgb2[0],fak2*rgb2[1],fak2*rgb2[2]));
   }
   
-  pixels.show();
+  pix1.show();
+  pix2.show();
 }
